@@ -1,6 +1,6 @@
 # oboard/base16384
 
-[![GitHub Workflow Status (with event)](https://img.shields.io/github/actions/workflow/status/oboard/base16384-moonbit/check.yml)](https://github.com/oboard/base16384-moonbit/actions/workflows/check.yml)
+[![GitHub Workflow Status (with event)](https://img.shields.io/github/actions/workflow/status/oboard/base16384-moonbit/check.yaml)](https://github.com/oboard/base16384-moonbit/actions/workflows/check.yaml)
 [![License](https://img.shields.io/github/license/oboard/base16384-moonbit)](https://github.com/oboard/base16384-moonbit/blob/main/LICENSE)
 
 
