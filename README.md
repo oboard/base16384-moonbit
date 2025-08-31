@@ -1,5 +1,6 @@
 # oboard/base16384
 
+[![Version](https://img.shields.io/badge/dynamic/json?url=https%3A//mooncakes.io/assets/oboard/base16384/resource.json&query=%24.meta_info.version&label=mooncakes&color=yellow)](https://mooncakes.io/docs/oboard/base16384)
 [![GitHub Workflow Status (with event)](https://img.shields.io/github/actions/workflow/status/oboard/base16384-moonbit/check.yaml)](https://github.com/oboard/base16384-moonbit/actions/workflows/check.yaml)
 [![License](https://img.shields.io/github/license/oboard/base16384-moonbit)](https://github.com/oboard/base16384-moonbit/blob/main/LICENSE)
 
