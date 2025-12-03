@@ -2,13 +2,13 @@
 package "oboard/base16384"
 
 // Values
-fn decode(Array[UInt16]) -> ArrayView[Byte]
+pub fn decode(Array[UInt16]) -> ArrayView[Byte]
 
-fn decode_str(String) -> String raise
+pub fn decode_str(String) -> String raise
 
-fn encode(Array[Byte]) -> Array[UInt16]
+pub fn encode(Array[Byte]) -> Array[UInt16]
 
-fn encode_str(String) -> String
+pub fn encode_str(String) -> String
 
 // Errors
 

@@ -1,9 +1,6 @@
 {
   "name": "oboard/base16384",
-  "version": "0.1.0",
-  "deps": {
-    "moonbitlang/x": "0.4.32"
-  },
+  "version": "0.1.1",
   "readme": "README.md",
   "repository": "https://github.com/oboard/base16384-moonbit",
   "license": "Apache-2.0",

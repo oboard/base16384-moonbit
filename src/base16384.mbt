@@ -83,7 +83,8 @@ fn align_uint16(
   fn process_input(i : Int, offset : Int, rest : Int, j : Int) -> Unit {
     if i >= input.length() {
       if offset > 0 && j < output_length {
-        output[j] = rest.to_uint16() + t_offset.to_uint16()
+        // Flush remaining bits, constrained to t_width
+        output[j] = ((rest & mask) + t_offset).to_uint16()
       }
       return
     }
@@ -98,14 +99,9 @@ fn align_uint16(
         (curr_offset, curr_rest, curr_j)
       } else {
         let bit_offset = curr_offset - t_width
-        let output_val = curr_rest.to_uint16() +
-          @cmp.maximum(
-            @cmp.minimum(
-              (char.to_uint16() >> bit_offset) + t_offset.to_uint16(),
-              0xFFFF,
-            ),
-            0,
-          )
+        // Compose next output value and constrain to t_width bits
+        let output_int = curr_rest + ((char >> bit_offset) + t_offset)
+        let output_val = (output_int & mask).to_uint16()
         if curr_j >= output_length {
           (bit_offset, 0, curr_j)
         } else {
@@ -153,7 +149,15 @@ pub fn decode(input : Array[UInt16]) -> ArrayView[Byte] {
   let valid_residue = if residue > 0 && residue <= 7 { residue } else { 7 }
   let outLen = (length.to_double() / 4).floor().to_int() * 7 +
     (if length % 4 > 0 { valid_residue.to_int() } else { 0 })
-  let output = align_uint16(input, outLen, 14, 8, 0x4e00, 0)
+  // Exclude the trailing length marker from bit realignment
+  let output = align_uint16(
+    input[0:length].to_array(),
+    outLen,
+    14,
+    8,
+    0x4e00,
+    0,
+  )
   fn find_last_non_zero(idx : Int) -> Int {
     if idx < 0 {
       -1
@@ -183,7 +187,7 @@ pub fn decode(input : Array[UInt16]) -> ArrayView[Byte] {
 /// consecutive bytes in little-endian format.
 ///
 pub fn encode_str(input : String) -> String {
-  let encoded = encode(@encoding.encode(UTF8, input).to_array())
+  let encoded = encode(@encoding/utf8.encode(input).to_array())
   let encoded_buf = @buffer.new()
   encoded.each(value => {
     encoded_buf.write_byte(value.to_byte())
@@ -206,12 +210,10 @@ pub fn encode_str(input : String) -> String {
 /// a valid UTF-8 string.
 ///
 pub fn decode_str(input : String) -> String raise Error {
-  if input.is_empty() {
-    return ""
-  }
-  let bytes = input.to_bytes().to_array()
+  let bytes = @encoding/utf16.encode(input)
   let len = bytes.length()
-  let array = Array::make(len / 2, (0).to_uint16())
+  let zero : UInt16 = 0
+  let array = Array::make(len / 2, zero)
   let mut i = 0
   while i < len - 1 {
     array[i / 2] = bytes[i].to_uint16() + (bytes[i + 1].to_uint16() << 8)
@@ -220,7 +222,7 @@ pub fn decode_str(input : String) -> String raise Error {
   if i < len {
     array[i / 2] = bytes[i].to_uint16()
   }
-  @encoding.decoder(UTF8).decode(decode(array).to_array() |> @bytes.from_array)
+  @encoding/utf8.decode(decode(array).to_array() |> Bytes::from_array)
 }
 
 ///|
@@ -230,4 +232,32 @@ test {
   let decoded = decode_str(encoded)
   inspect(encoded, content="栙擆羼湷槜瓆帀㴄")
   inspect(decoded, content="hello world")
+}
+
+///|
+test "encode" {
+  assert_eq(encode_str(""), "㴀")
+  assert_eq(encode_str("1"), "婀㴁")
+  assert_eq(encode_str("12"), "婌渀㴂")
+  assert_eq(encode_str("123"), "婌焰㴃")
+  assert_eq(encode_str("1234"), "婌焳帀㴄")
+  assert_eq(encode_str("12345"), "婌焳廔㴅")
+  assert_eq(encode_str("123456"), "婌焳廔萀㴆")
+  assert_eq(encode_str("1234567"), "婌焳廔萷㴀")
+  assert_eq(encode_str("12345678"), "婌焳廔萷尀㴁")
+  assert_eq(encode_str("123456789"), "婌焳廔萷導帀㴂")
+}
+
+///|
+test "decode" {
+  assert_eq(decode_str("㴀"), "")
+  assert_eq(decode_str("婀㴁"), "1")
+  assert_eq(decode_str("婌渀㴂"), "12")
+  assert_eq(decode_str("婌焰㴃"), "123")
+  assert_eq(decode_str("婌焳帀㴄"), "1234")
+  assert_eq(decode_str("婌焳廔㴅"), "12345")
+  assert_eq(decode_str("婌焳廔萀㴆"), "123456")
+  assert_eq(decode_str("婌焳廔萷㴀"), "1234567")
+  assert_eq(decode_str("婌焳廔萷尀㴁"), "12345678")
+  assert_eq(decode_str("婌焳廔萷導帀㴂"), "123456789")
 }
