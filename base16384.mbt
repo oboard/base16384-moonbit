@@ -151,7 +151,7 @@ pub fn decode(input : Array[UInt16]) -> ArrayView[Byte] {
     (if length % 4 > 0 { valid_residue.to_int() } else { 0 })
   // Exclude the trailing length marker from bit realignment
   let output = align_uint16(
-    input[0:length].to_array(),
+    input[0:length].to_owned(),
     outLen,
     14,
     8,
@@ -222,7 +222,7 @@ pub fn decode_str(input : String) -> String raise Error {
   if i < len {
     array[i / 2] = bytes[i].to_uint16()
   }
-  @encoding/utf8.decode(decode(array).to_array() |> Bytes::from_array)
+  @encoding/utf8.decode(decode(array).to_owned() |> Bytes::from_array)
 }
 
 ///|
