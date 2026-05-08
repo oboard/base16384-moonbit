@@ -4,4 +4,5 @@ import {
   "moonbitlang/core/buffer",
   "moonbitlang/core/math",
   "moonbitlang/core/cmp",
+  "moonbitlang/core/bench",
 }
