@@ -1,14 +1,9 @@
 {
-  "name": "oboard/base16384",
-  "version": "0.1.2",
-  "readme": "README.md",
-  "repository": "https://github.com/oboard/base16384-moonbit",
-  "license": "Apache-2.0",
-  "keywords": [
-    "base16384",
-    "encoding",
-    "utf16be"
-  ],
-  "description": "Encode binary file to printable utf16be, and vice versa.",
-  "source": "src"
+	"name": "oboard/base16384",
+	"version": "0.1.3",
+	"readme": "README.md",
+	"repository": "https://github.com/oboard/base16384-moonbit",
+	"license": "Apache-2.0",
+	"keywords": ["base16384", "encoding", "utf16be"],
+	"description": "Encode binary file to printable utf16be, and vice versa."
 }
