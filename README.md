@@ -12,11 +12,11 @@ It is a MoonBit reimplementation of [base16384](https://github.com/fumiama/base1
 ## API
 
 ```moonbit
-fn decode(Array[UInt16]) -> ArrayView[Byte]
+fn decode(ArrayView[UInt16]) -> BytesView
 
 fn decode_str(String) -> String raise
 
-fn encode(Array[Byte]) -> Array[UInt16]
+fn encode(BytesView) -> Array[UInt16]
 
 fn encode_str(String) -> String
 ```

@@ -16,7 +16,7 @@
 /// Returns an array of 16-bit unsigned integers with the realigned bit data.
 ///
 fn align_bytes(
-  input : Array[Byte],
+  input : BytesView,
   output_length : Int,
   s_width : Int,
   t_width : Int,
@@ -25,104 +25,105 @@ fn align_bytes(
 ) -> Array[UInt16] {
   let mask = (1 << t_width) - 1
   let output = Array::make(output_length, (0).to_uint16())
-  fn process_input(i : Int, offset : Int, rest : Int, j : Int) -> Unit {
-    if i >= input.length() {
-      if offset > 0 && j < output_length {
-        output[j] = rest.to_uint16() + t_offset.to_uint16()
-      }
-      return
-    }
+  let mut offset = 0
+  let mut rest = 0
+  let mut j = 0
+  for i in 0..<input.length() {
     let char = input[i].to_int() - s_offset
-    let new_offset = offset + s_width
-    fn extract_bits(
-      curr_offset : Int,
-      curr_rest : Int,
-      curr_j : Int,
-    ) -> (Int, Int, Int) {
-      if curr_offset < t_width {
-        (curr_offset, curr_rest, curr_j)
-      } else {
-        let bit_offset = curr_offset - t_width
-        let output_val = curr_rest.to_uint16() +
-          @cmp.maximum(
-            @cmp.minimum(
-              (char.to_uint16() >> bit_offset) + t_offset.to_uint16(),
-              0xFFFF,
-            ),
-            0,
-          )
-        if curr_j >= output_length {
-          (bit_offset, 0, curr_j)
-        } else {
-          output[curr_j] = output_val
-          extract_bits(bit_offset, 0, curr_j + 1)
-        }
+    offset += s_width
+    while offset >= t_width {
+      let bit_offset = offset - t_width
+      if j < output_length {
+        output[j] = (rest + (char >> bit_offset) + t_offset).to_uint16()
       }
+      j += 1
+      offset = bit_offset
+      rest = 0
     }
-
-    let (final_offset, final_rest, new_j) = extract_bits(new_offset, rest, j)
-    let updated_rest = final_rest + ((char << (t_width - final_offset)) & mask)
-    process_input(i + 1, final_offset, updated_rest, new_j)
+    rest += (char << (t_width - offset)) & mask
   }
-
-  process_input(0, 0, 0, 0)
+  if offset > 0 && j < output_length {
+    output[j] = (rest + t_offset).to_uint16()
+  }
   output
 }
 
 ///|
-fn align_uint16(
-  input : Array[UInt16],
+fn decode_bytes(
+  input : ArrayView[UInt16],
   output_length : Int,
-  s_width : Int,
-  t_width : Int,
   s_offset : Int,
-  t_offset : Int,
-) -> Array[UInt16] {
-  let mask = (1 << t_width) - 1
-  let output = Array::make(output_length, (0).to_uint16())
-  fn process_input(i : Int, offset : Int, rest : Int, j : Int) -> Unit {
-    if i >= input.length() {
-      if offset > 0 && j < output_length {
-        // Flush remaining bits, constrained to t_width
-        output[j] = ((rest & mask) + t_offset).to_uint16()
-      }
-      return
-    }
+) -> Bytes {
+  let mask = (1 << 8) - 1
+  let output = Array::make(output_length, b'\x00')
+  let mut offset = 0
+  let mut rest = 0
+  let mut j = 0
+  for i in 0..<input.length() {
     let char = input[i].to_int() - s_offset
-    let new_offset = offset + s_width
-    fn extract_bits(
-      curr_offset : Int,
-      curr_rest : Int,
-      curr_j : Int,
-    ) -> (Int, Int, Int) {
-      if curr_offset < t_width {
-        (curr_offset, curr_rest, curr_j)
-      } else {
-        let bit_offset = curr_offset - t_width
-        // Compose next output value and constrain to t_width bits
-        let output_int = curr_rest + ((char >> bit_offset) + t_offset)
-        let output_val = (output_int & mask).to_uint16()
-        if curr_j >= output_length {
-          (bit_offset, 0, curr_j)
-        } else {
-          output[curr_j] = output_val
-          extract_bits(bit_offset, 0, curr_j + 1)
-        }
+    offset += 14
+    while offset >= 8 {
+      let bit_offset = offset - 8
+      if j < output_length {
+        output[j] = ((rest + (char >> bit_offset)) & mask).to_byte()
       }
+      j += 1
+      offset = bit_offset
+      rest = 0
     }
-
-    let (final_offset, final_rest, new_j) = extract_bits(new_offset, rest, j)
-    let updated_rest = final_rest + ((char << (t_width - final_offset)) & mask)
-    process_input(i + 1, final_offset, updated_rest, new_j)
+    rest += (char << (8 - offset)) & mask
   }
-
-  process_input(0, 0, 0, 0)
-  output
+  if offset > 0 && j < output_length {
+    output[j] = (rest & mask).to_byte()
+  }
+  Bytes::from_array(output)
 }
 
 ///|
-pub fn encode(input : Array[Byte]) -> Array[UInt16] {
-  let outputLength = @math.ceil(input.length().to_double() * 4 / 7).to_int() + 1
+fn decode_string_bytes(
+  input : String,
+  input_length : Int,
+  output_length : Int,
+  s_offset : Int,
+) -> Bytes {
+  Bytes::makei(output_length, i => {
+    let bit = i * 8
+    let unit = bit / 14
+    let offset = bit % 14
+    let curr = input[unit].to_int() - s_offset
+    if offset <= 6 {
+      ((curr >> (6 - offset)) & 0xff).to_byte()
+    } else {
+      let first_bits = 14 - offset
+      let second_bits = 8 - first_bits
+      let next = if unit + 1 < input_length {
+        input[unit + 1].to_int() - s_offset
+      } else {
+        0
+      }
+      let left = (curr & ((1 << first_bits) - 1)) << second_bits
+      let right = (next >> (14 - second_bits)) & ((1 << second_bits) - 1)
+      (left | right).to_byte()
+    }
+  })
+}
+
+///|
+fn decoded_length(encoded_length : Int, residue : UInt16) -> Int {
+  if residue == 0 {
+    encoded_length / 4 * 7
+  } else if residue <= 7 {
+    let residue_len = residue.to_int()
+    let partial_units = (residue_len * 4 + 6) / 7
+    (encoded_length - partial_units) / 4 * 7 + residue_len
+  } else {
+    encoded_length / 4 * 7
+  }
+}
+
+///|
+pub fn encode(input : BytesView) -> Array[UInt16] {
+  let outputLength = (input.length() * 4 + 6) / 7 + 1
   let output = align_bytes(input, outputLength, 8, 14, 0, 0x4e00)
   output[outputLength - 1] = input.length().to_uint16() % 7 + 0x3d00
   output
@@ -140,40 +141,16 @@ pub fn encode(input : Array[Byte]) -> Array[UInt16] {
 /// Returns an `ArrayView[Byte]` containing the decoded byte data. Returns an
 /// empty view if the input is empty or contains only the length marker.
 ///
-pub fn decode(input : Array[UInt16]) -> ArrayView[Byte] {
+pub fn decode(input : ArrayView[UInt16]) -> BytesView {
   if input.is_empty() || input.length() == 1 {
     return []
   }
   let length = input.length() - 1
   let residue = input[length] - 0x3d00
-  let valid_residue = if residue > 0 && residue <= 7 { residue } else { 7 }
-  let outLen = (length.to_double() / 4).floor().to_int() * 7 +
-    (if length % 4 > 0 { valid_residue.to_int() } else { 0 })
+  let outLen = decoded_length(length, residue)
   // Exclude the trailing length marker from bit realignment
-  let output = align_uint16(
-    input[0:length].to_owned(),
-    outLen,
-    14,
-    8,
-    0x4e00,
-    0,
-  )
-  fn find_last_non_zero(idx : Int) -> Int {
-    if idx < 0 {
-      -1
-    } else if output[idx] == 0 {
-      find_last_non_zero(idx - 1)
-    } else {
-      idx
-    }
-  }
-
-  let lastNonZero = find_last_non_zero(outLen - 1)
-  return if lastNonZero < 0 {
-    []
-  } else {
-    output[0:lastNonZero + 1].map(i => i.to_byte())
-  }
+  let output = decode_bytes(input[0:length], outLen, 0x4e00)
+  output[:]
 }
 
 ///|
@@ -187,12 +164,10 @@ pub fn decode(input : Array[UInt16]) -> ArrayView[Byte] {
 /// consecutive bytes in little-endian format.
 ///
 pub fn encode_str(input : String) -> String {
-  let encoded = encode(@encoding/utf8.encode(input).to_array())
-  let encoded_buf = @buffer.new()
-  encoded.each(value => {
-    encoded_buf.write_byte(value.to_byte())
-    encoded_buf.write_byte((value >> 8).to_byte())
-  })
+  let bytes = @encoding/utf8.encode(input)
+  let encoded = encode(bytes[:])
+  let encoded_buf = @buffer.new(size_hint=encoded.length() * 2)
+  encoded.each(value => encoded_buf.write_uint16_le(value))
   encoded_buf.to_string()
 }
 
@@ -210,19 +185,14 @@ pub fn encode_str(input : String) -> String {
 /// a valid UTF-8 string.
 ///
 pub fn decode_str(input : String) -> String raise Error {
-  let bytes = @encoding/utf16.encode(input)
-  let len = bytes.length()
-  let zero : UInt16 = 0
-  let array = Array::make(len / 2, zero)
-  let mut i = 0
-  while i < len - 1 {
-    array[i / 2] = bytes[i].to_uint16() + (bytes[i + 1].to_uint16() << 8)
-    i = i + 2
+  if input.is_empty() || input.length() == 1 {
+    return ""
   }
-  if i < len {
-    array[i / 2] = bytes[i].to_uint16()
-  }
-  @encoding/utf8.decode(decode(array).to_owned() |> Bytes::from_array)
+  let length = input.length() - 1
+  let residue = input[length] - 0x3d00
+  let outLen = decoded_length(length, residue)
+  let output = decode_string_bytes(input, length, outLen, 0x4e00)
+  @encoding/utf8.decode(output[:])
 }
 
 ///|
@@ -260,4 +230,10 @@ test "decode" {
   assert_eq(decode_str("婌焳廔萷㴀"), "1234567")
   assert_eq(decode_str("婌焳廔萷尀㴁"), "12345678")
   assert_eq(decode_str("婌焳廔萷導帀㴂"), "123456789")
+}
+
+///|
+test "decode preserves trailing zero bytes" {
+  let input = b"a\x00b\x00"
+  assert_eq(decode(encode(input)), input[:])
 }
